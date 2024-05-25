@@ -2,7 +2,10 @@ use std::str::Bytes;
 
 use bip39::{Language, Mnemonic, MnemonicType, Seed};
 
-use bitcoin_hashes::{ripemd160, Hash};
+use bitcoin_hashes::{
+    hex::{Case, DisplayHex},
+    ripemd160, Hash,
+};
 use ring::{digest, hmac, rand};
 
 use secp256k1::{PublicKey, Scalar, Secp256k1, SecretKey};
@@ -87,6 +90,12 @@ fn main() {
     let root_key = bs58::encode(payload_and_checksum);
     // println!("root_key: {:?}", root_key.);
     println!("root_key: {}", root_key.into_string());
+
+    derive_path(
+        SecretKey::from_slice(master_secret_key).unwrap(),
+        master_chain_code.try_into().unwrap(),
+        &[2147483692, 2147483708, 2147483648, 0, 0],
+    );
 }
 
 // Serialize a public key in compressed format.
@@ -102,7 +111,7 @@ fn curve_point_from_int(k: SecretKey) -> PublicKey {
 }
 
 // Calculate the fingerprint for a private key.
-fn fingerprint_from_private_key(k: SecretKey) -> Vec<u8> {
+fn fingerprint_from_private_key(k: SecretKey) -> [u8; 4] {
     let pk = curve_point_from_int(k);
 
     // Serialize the public key in compressed format
@@ -116,7 +125,7 @@ fn fingerprint_from_private_key(k: SecretKey) -> Vec<u8> {
     let ripemd_result = ripemd160::Hash::hash(sha256_result.as_ref());
 
     // Return the first 4 bytes as the fingerprint
-    ripemd_result[0..4].to_vec()
+    ripemd_result[0..4].try_into().unwrap()
 }
 
 // type HmacSha512 = Hmac<Sha512>;
@@ -126,13 +135,15 @@ fn derive_ext_private_key(
     private_key: SecretKey,
     chain_code: &[u8],
     child_number: u32,
-) -> (SecretKey, Vec<u8>) {
+) -> (SecretKey, [u8; 32]) {
     let key = hmac::Key::new(hmac::HMAC_SHA512, chain_code);
 
     let mut data = if child_number >= (1 << 31) {
         [&[0u8], &private_key[..]].concat()
     } else {
-        private_key.as_ref().to_vec()
+        let p = curve_point_from_int(private_key);
+        serialize_curve_point(p)
+        // private_key.as_ref().to_vec()
     };
     data.extend_from_slice(&child_number.to_be_bytes());
 
@@ -154,5 +165,35 @@ fn derive_ext_private_key(
         .unwrap();
     let child_chain_code = r;
 
-    (child_private_key, child_chain_code)
+    (child_private_key, child_chain_code.try_into().unwrap())
+}
+
+fn derive_path(
+    master_private_key: SecretKey,
+    master_chain_code: [u8; 32],
+    path_numbers: &[u32; 5],
+) {
+    let mut depth = 0;
+    let mut parent_fingerprint = [0x00; 4];
+    let mut child_number: Option<u32> = None;
+    let mut private_key = master_private_key;
+    let mut chain_code = master_chain_code;
+
+    for &i in path_numbers {
+        depth += 1;
+        println!("depth: {}", depth);
+
+        child_number = Some(i);
+        println!("child_number: {:?}", child_number);
+
+        parent_fingerprint = fingerprint_from_private_key(private_key.clone());
+        println!("parent_fingerprint: {:?}", hex::encode(parent_fingerprint));
+
+        let derived = derive_ext_private_key(private_key.clone(), &chain_code, i);
+        private_key = derived.0;
+        chain_code = derived.1;
+
+        println!("private_key: {:?}", hex::encode(private_key.as_ref()));
+        println!("chain_code: {:?}\n", hex::encode(chain_code));
+    }
 }
