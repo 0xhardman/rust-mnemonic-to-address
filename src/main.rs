@@ -16,7 +16,7 @@ fn main() {
     // 生成助记词
     // let mnemonic = Mnemonic::new(MnemonicType::Words12, Language::English);
     //season aunt saddle mansion claw skirt enhance coach lizard knock diary picnic
-    let mnemonic = Mnemonic::from_phrase(
+    let mnemonic: Mnemonic = Mnemonic::from_phrase(
         "indoor dish desk flag debris potato excuse depart ticket judge file exit",
         Language::English,
     )
@@ -91,7 +91,7 @@ fn main() {
     // println!("root_key: {:?}", root_key.);
     println!("root_key: {}", root_key.into_string());
 
-    derive_path(
+    let private_key = derive_path(
         SecretKey::from_slice(master_secret_key).unwrap(),
         master_chain_code.try_into().unwrap(),
         &[2147483692, 2147483708, 2147483648, 0, 0],
@@ -172,7 +172,7 @@ fn derive_path(
     master_private_key: SecretKey,
     master_chain_code: [u8; 32],
     path_numbers: &[u32; 5],
-) {
+) -> SecretKey {
     let mut depth = 0;
     let mut parent_fingerprint = [0x00; 4];
     let mut child_number: Option<u32> = None;
@@ -196,4 +196,51 @@ fn derive_path(
         println!("private_key: {:?}", hex::encode(private_key.as_ref()));
         println!("chain_code: {:?}\n", hex::encode(chain_code));
     }
+    (private_key)
+}
+
+fn get_extended_private_key(private_key: &[u8], chain_code: &[u8]) -> String {
+    let version_bytes = [
+        ("mainnet_public", "0488b21e"),
+        ("mainnet_private", "0488ade4"),
+        ("testnet_public", "043587cf"),
+        ("testnet_private", "04358394"),
+    ]
+    .iter()
+    .cloned()
+    .map(|(k, v)| (k, hex::decode(v).unwrap()))
+    .collect::<std::collections::HashMap<_, _>>();
+
+    let version_bytes = version_bytes.get("mainnet_private").unwrap().as_slice();
+    let depth_byte = [0x00];
+    let parent_fingerprint = [0x00; 4];
+    let child_number_bytes = [0x00; 4];
+    // This is a placeholder for `L` from the original code
+    // Assuming `L` is a byte array which is prefixed with a zero byte in `key_bytes`
+    // let l = [0x00; 33]; // Placeholder, replace it with actual `L`
+    let key_bytes = [&[0x00], private_key].concat();
+
+    // let master_chain_code = [0x00; 32]; // Placeholder, replace with actual master_chain_code
+    let all_parts = [
+        version_bytes,
+        &depth_byte,
+        &parent_fingerprint,
+        &child_number_bytes,
+        &chain_code,
+        &key_bytes,
+    ]
+    .concat();
+
+    let checksum = digest::digest(
+        &digest::SHA256,
+        &digest::digest(&digest::SHA256, &all_parts).as_ref(),
+    );
+    let checksum = &checksum.as_ref()[..4]; // T
+    let payload_and_checksum = [&all_parts, checksum].concat();
+    // for part in all_parts.iter() {
+    //     println!("{}", (part));
+    // }
+
+    let extended_private_key = bs58::encode(payload_and_checksum).into_string();
+    extended_private_key
 }
