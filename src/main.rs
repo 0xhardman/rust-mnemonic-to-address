@@ -8,7 +8,9 @@ use bitcoin_hashes::{
 };
 use ring::{digest, hmac, rand};
 
+// use secp256k1::hashes::{sha256, Hash};
 use secp256k1::{PublicKey, Scalar, Secp256k1, SecretKey};
+use tiny_keccak::{Hasher, Keccak};
 
 // use sha2::{Digest, Sha256};
 
@@ -46,56 +48,34 @@ fn main() {
     println!("master_secret_key: {}", hex::encode(master_secret_key));
     println!("master_chain_code: {}", hex::encode(master_chain_code));
 
-    let version_bytes = [
-        ("mainnet_public", "0488b21e"),
-        ("mainnet_private", "0488ade4"),
-        ("testnet_public", "043587cf"),
-        ("testnet_private", "04358394"),
-    ]
-    .iter()
-    .cloned()
-    .map(|(k, v)| (k, hex::decode(v).unwrap()))
-    .collect::<std::collections::HashMap<_, _>>();
-
-    let version_bytes = version_bytes.get("mainnet_private").unwrap().as_slice();
-    let depth_byte = [0x00];
-    let parent_fingerprint = [0x00; 4];
-    let child_number_bytes = [0x00; 4];
-    // This is a placeholder for `L` from the original code
-    // Assuming `L` is a byte array which is prefixed with a zero byte in `key_bytes`
-    // let l = [0x00; 33]; // Placeholder, replace it with actual `L`
-    let key_bytes = [&[0x00], il].concat();
-
-    // let master_chain_code = [0x00; 32]; // Placeholder, replace with actual master_chain_code
-    let all_parts = [
-        version_bytes,
-        &depth_byte,
-        &parent_fingerprint,
-        &child_number_bytes,
-        &master_chain_code,
-        &key_bytes,
-    ]
-    .concat();
-
-    let checksum = digest::digest(
-        &digest::SHA256,
-        &digest::digest(&digest::SHA256, &all_parts).as_ref(),
-    );
-    let checksum = &checksum.as_ref()[..4]; // T
-    let payload_and_checksum = [&all_parts, checksum].concat();
-    // for part in all_parts.iter() {
-    //     println!("{}", (part));
-    // }
-
-    let root_key = bs58::encode(payload_and_checksum);
+    let root_key = get_root_key(master_secret_key, master_chain_code);
     // println!("root_key: {:?}", root_key.);
-    println!("root_key: {}", root_key.into_string());
+    println!("root_key: {}", root_key);
 
-    let private_key = derive_path(
+    let private_key = derive_with_path(
         SecretKey::from_slice(master_secret_key).unwrap(),
         master_chain_code.try_into().unwrap(),
         &[2147483692, 2147483708, 2147483648, 0, 0],
     );
+    println!("private_key: {:?}", hex::encode(private_key.as_ref()));
+
+    let public_key = curve_point_from_int(private_key);
+    println!(
+        "public_key: {:?}",
+        hex::encode(serialize_curve_point(public_key))
+    );
+
+    // Hash the concatenated x and y public key point values:
+    let serialized_pub_key = public_key.serialize_uncompressed();
+    let public_key_bytes = &serialized_pub_key[1..];
+
+    let mut hasher = Keccak::v256();
+    hasher.update(public_key_bytes);
+    let mut output = [0u8; 32];
+    hasher.finalize(&mut output);
+
+    let address = &output[12..];
+    println!("address: {:?}", hex::encode(address));
 }
 
 // Serialize a public key in compressed format.
@@ -168,13 +148,13 @@ fn derive_ext_private_key(
     (child_private_key, child_chain_code.try_into().unwrap())
 }
 
-fn derive_path(
+fn derive_with_path(
     master_private_key: SecretKey,
     master_chain_code: [u8; 32],
     path_numbers: &[u32; 5],
 ) -> SecretKey {
     let mut depth = 0;
-    let mut parent_fingerprint = [0x00; 4];
+
     let mut child_number: Option<u32> = None;
     let mut private_key = master_private_key;
     let mut chain_code = master_chain_code;
@@ -186,20 +166,32 @@ fn derive_path(
         child_number = Some(i);
         println!("child_number: {:?}", child_number);
 
-        parent_fingerprint = fingerprint_from_private_key(private_key.clone());
-        println!("parent_fingerprint: {:?}", hex::encode(parent_fingerprint));
-
-        let derived = derive_ext_private_key(private_key.clone(), &chain_code, i);
-        private_key = derived.0;
-        chain_code = derived.1;
-
-        println!("private_key: {:?}", hex::encode(private_key.as_ref()));
-        println!("chain_code: {:?}\n", hex::encode(chain_code));
+        (private_key, chain_code) = derive(child_number.unwrap(), private_key, chain_code);
     }
-    (private_key)
+    private_key
 }
 
-fn get_extended_private_key(private_key: &[u8], chain_code: &[u8]) -> String {
+fn derive(
+    child_number: u32,
+    private_key: SecretKey,
+    chain_code: [u8; 32],
+) -> (SecretKey, [u8; 32]) {
+    println!("child_number: {:?}", child_number);
+
+    let child_fingerprint = fingerprint_from_private_key(private_key.clone());
+    println!("child_fingerprint: {:?}", hex::encode(child_fingerprint));
+
+    let derived = derive_ext_private_key(private_key.clone(), &chain_code, child_number);
+    let private_key = derived.0;
+    let chain_code = derived.1;
+
+    println!("private_key: {:?}", hex::encode(private_key.as_ref()));
+    println!("chain_code: {:?}\n", hex::encode(chain_code));
+
+    (private_key, chain_code)
+}
+
+fn get_root_key(private_key: &[u8], chain_code: &[u8]) -> String {
     let version_bytes = [
         ("mainnet_public", "0488b21e"),
         ("mainnet_private", "0488ade4"),
@@ -241,6 +233,5 @@ fn get_extended_private_key(private_key: &[u8], chain_code: &[u8]) -> String {
     //     println!("{}", (part));
     // }
 
-    let extended_private_key = bs58::encode(payload_and_checksum).into_string();
-    extended_private_key
+    bs58::encode(payload_and_checksum).into_string()
 }
