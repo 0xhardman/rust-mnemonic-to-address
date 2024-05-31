@@ -6,18 +6,9 @@ mod step5;
 mod step6;
 mod utils;
 
-use std::str::Bytes;
-
-use bip39::{Language, Mnemonic, MnemonicType, Seed};
-
-use bitcoin_hashes::{
-    hex::{Case, DisplayHex},
-    ripemd160, Hash,
-};
-use ring::{digest, hmac, rand};
-
-// use secp256k1::hashes::{sha256, Hash};
-use secp256k1::{PublicKey, Scalar, Secp256k1, SecretKey};
+use bip39::{Language, Mnemonic, Seed};
+use ring::hmac;
+use secp256k1::SecretKey;
 use tiny_keccak::{Hasher, Keccak};
 
 use utils::{curve_point_from_int, derive_with_path, get_root_key, serialize_curve_point};

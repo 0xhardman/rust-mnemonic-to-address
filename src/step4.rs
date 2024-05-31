@@ -1,16 +1,4 @@
-use std::str::Bytes;
-
-use bip39::{Language, Mnemonic, MnemonicType, Seed};
-
-use bitcoin_hashes::{
-    hex::{Case, DisplayHex},
-    ripemd160, Hash,
-};
-use ring::{digest, hmac, rand};
-
-// use secp256k1::hashes::{sha256, Hash};
-use secp256k1::{PublicKey, Scalar, Secp256k1, SecretKey};
-use tiny_keccak::{Hasher, Keccak};
+use secp256k1::SecretKey;
 
 use crate::utils::derive_with_path;
 
@@ -41,7 +29,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_step1_generate_mnemonic() {
+    fn test() {
         let derived_path = [2147483692, 2147483708, 2147483648, 0, 0];
         assert_eq!(
             step3_master_kay_to_private_key(
