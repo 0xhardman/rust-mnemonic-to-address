@@ -11,14 +11,12 @@ fn step3_master_kay_to_private_key(
 ) -> String {
     let master_secret_key_vec = hex::decode(master_secret_key_hex).unwrap();
     let master_secret_key: &[u8] = master_secret_key_vec.as_ref();
-    let master_code_vec: Vec<u8> = hex::decode(master_chain_code_hex).unwrap();
-    let master_code: &[u8] = master_code_vec.as_ref();
-
-    // let master_chain_code: &[u8] = hex::decode(master_chain_code_hex).unwrap().as_ref();
+    let master_chain_code_vec: Vec<u8> = hex::decode(master_chain_code_hex).unwrap();
+    let master_chain_code: &[u8] = master_chain_code_vec.as_ref();
 
     let private_key = derive_with_path(
         SecretKey::from_slice(master_secret_key.clone()).unwrap(),
-        master_code.try_into().unwrap(),
+        master_chain_code.try_into().unwrap(),
         &derived_path,
     );
     hex::encode(private_key.as_ref())
@@ -46,10 +44,11 @@ mod tests {
     // One more thing need to be mentioned is Apostrophe in the path indicates that BIP32 hardened derivation is used.
     // such as 44' is a hardened derivation, while 44 is not.
     // And 44' actually means 2^31+44, which is a hardened derivation.
+    // "hardening" in BIP32 increases the security of derived keys by making it impossible to derive other child keys using just a public key and a child key, effectively preventing potential attackers from accessing your key hierarchy.
 
     #[test]
     fn test() {
-        let derived_path = [(2 ^ 31) + 44, (2 ^ 31) + 60, 2147483648, 0, 0];
+        let derived_path = [(2 ^ 31) + 44, (2 ^ 31) + 60, 2 ^ 21, 0, 0];
         assert_eq!(
             step3_master_kay_to_private_key(
                 "5e01502044f205b98ba493971561284565e41f34f03494bb521654b0c35cb3a9".to_string(),

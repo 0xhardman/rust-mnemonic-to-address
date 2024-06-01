@@ -1,4 +1,7 @@
-use bitcoin_hashes::{ripemd160, Hash};
+
+use bitcoin_hashes::{
+    ripemd160, Hash,
+};
 use ring::{digest, hmac};
 
 // use secp256k1::hashes::{sha256, Hash};

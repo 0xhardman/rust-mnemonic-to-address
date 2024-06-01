@@ -2,8 +2,8 @@ mod step1;
 mod step2;
 mod step3;
 mod step4;
-mod step6;
 mod step5;
+mod step6;
 mod utils;
 
 use bip39::{Language, Mnemonic, Seed};
@@ -12,8 +12,6 @@ use secp256k1::SecretKey;
 use tiny_keccak::{Hasher, Keccak};
 
 use utils::{curve_point_from_int, derive_with_path, get_root_key, serialize_curve_point};
-
-// use sha2::{Digest, Sha256};
 
 fn main() {
     // generate mnemonic

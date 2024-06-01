@@ -37,6 +37,7 @@ mod tests {
         // Also that means the length of the mnemonic is a multiple of 3, but maximum 24 words. The more words, the more secure.
         // To make sure the Raw Binary is valid, we need to calculate the checksum of the Raw Binary.
         // The checksum is the first several bits of the SHA256 hash of the Raw Binary.
+        // Then we get a binary length of 132 bits, and we can convert it to a 12 words mnemonic.
         // mnemonic = Raw Binary + checksum
         // checksum = SHA256(Raw Binary)[:len(01_string)/32]
 

@@ -5,7 +5,6 @@ use bip39::{Language, Mnemonic, Seed};
 // use sha2::{Digest, Sha256};
 
 fn step2_mnemonic_to_seed(mnemonic: &Mnemonic) -> String {
-    // generate mnemonic
     let seed = Seed::new(mnemonic, "");
     seed.as_bytes();
     hex::encode(seed.as_bytes())
